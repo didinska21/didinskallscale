@@ -328,36 +328,48 @@ async function checkInbox(provider, axiosInstance, emailData, maxAttempts = 15, 
 async function sendOTPCode(axiosInstance, email, refCode) {
   // Coba beberapa endpoint yang mungkin
   const endpoints = [
-    'https://dashboard.allscale.io/api/public/send/verification/mail',
-    'https://dashboard.allscale.io/api/send/verification/mail',
-    'https://dashboard.allscale.io/api/public/verification/send',
-    'https://dashboard.allscale.io/api/public/otp/send'
+    { url: 'https://dashboard.allscale.io/api/public/send/verification/mail', data: { email, referrer_id: refCode } },
+    { url: 'https://dashboard.allscale.io/api/send/verification/mail', data: { email, referrer_id: refCode } },
+    { url: 'https://dashboard.allscale.io/api/public/verification/send', data: { email, referrer_id: refCode } },
+    { url: 'https://dashboard.allscale.io/api/public/otp/send', data: { email, referrer_id: refCode } },
+    { url: 'https://dashboard.allscale.io/api/v1/auth/send-otp', data: { email, referrer_id: refCode } },
+    { url: 'https://dashboard.allscale.io/api/auth/send-verification', data: { email, referral_code: refCode } },
   ];
   
-  const spinner = createSpinner('Sending OTP code...');
-  spinner.start();
+  console.log(`${YELLOW}Trying to send OTP...${RESET}`);
   
-  for (const url of endpoints) {
+  for (let i = 0; i < endpoints.length; i++) {
+    const endpoint = endpoints[i];
+    const spinner = createSpinner(`Trying endpoint ${i + 1}/${endpoints.length}`);
+    spinner.start();
+    
     try {
-      const data = { 
-        email: email,
-        referrer_id: refCode
-      };
-      const headers = getGlobalHeaders(url, refCode);
+      const headers = getGlobalHeaders(endpoint.url, refCode);
+      const response = await axiosInstance.post(endpoint.url, endpoint.data, { headers });
       
-      const response = await axiosInstance.post(url, data, { headers });
-      
-      if (response.data.code === 0 || response.status === 200) {
-        spinner.succeed(`OTP code sent successfully via ${url}`);
+      if (response.data.code === 0 || response.status === 200 || response.status === 201) {
+        spinner.succeed(`✓ OTP sent via: ${endpoint.url}`);
+        console.log(`${GREEN}Response: ${JSON.stringify(response.data)}${RESET}\n`);
         return true;
+      } else {
+        spinner.fail(`Response code: ${response.data.code || response.status}`);
+        console.log(`${YELLOW}Response: ${JSON.stringify(response.data)}${RESET}\n`);
       }
     } catch (error) {
-      // Coba endpoint berikutnya
-      continue;
+      const status = error.response ? error.response.status : 'N/A';
+      const errorData = error.response ? JSON.stringify(error.response.data) : error.message;
+      spinner.fail(`${status} - ${errorData.substring(0, 100)}`);
     }
   }
   
-  spinner.fail('Failed to send OTP from all endpoints');
+  console.log(`${RED}${BOLD}All endpoints failed. Please check the correct endpoint manually.${RESET}\n`);
+  console.log(`${CYAN}${BOLD}Instructions:${RESET}`);
+  console.log(`1. Open https://dashboard.allscale.io/signup in browser`);
+  console.log(`2. Open DevTools (F12) > Network tab`);
+  console.log(`3. Enter email and click 'Send OTP' button`);
+  console.log(`4. Look for the request in Network tab`);
+  console.log(`5. Copy the URL and request payload\n`);
+  
   return false;
 }
 
