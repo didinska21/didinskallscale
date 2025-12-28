@@ -1,39 +1,83 @@
 /**
  * TEMP EMAIL HANDLER
- * Using 1secmail.com (free, no API key)
+ * Using mail.tm (free, reliable, no rate limit)
  */
 
 const axios = require('axios');
 
-const API_BASE = 'https://www.1secmail.com/api/v1/';
+const API_BASE = 'https://api.mail.tm';
 
-// Generate random email
+// Generate random string
+function randomString(length = 10) {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+// Get available domain
+async function getDomain() {
+  try {
+    const res = await axios.get(`${API_BASE}/domains`);
+    return res.data['hydra:member'][0].domain;
+  } catch (err) {
+    throw new Error(`Failed to get domain: ${err.message}`);
+  }
+}
+
+// Create account
 async function getTempEmail() {
   try {
-    const res = await axios.get(`${API_BASE}?action=genRandomMailbox&count=1`);
-    return res.data[0];
+    const domain = await getDomain();
+    const username = randomString(12);
+    const email = `${username}@${domain}`;
+    const password = randomString(16);
+    
+    // Register account
+    await axios.post(`${API_BASE}/accounts`, {
+      address: email,
+      password: password
+    });
+    
+    // Get token
+    const tokenRes = await axios.post(`${API_BASE}/token`, {
+      address: email,
+      password: password
+    });
+    
+    const token = tokenRes.data.token;
+    
+    return { email, token };
   } catch (err) {
-    throw new Error(`Failed to get temp email: ${err.message}`);
+    throw new Error(`Failed to create temp email: ${err.message}`);
   }
 }
 
 // Get OTP from email
-async function getOTP(email, maxRetries = 30) {
-  const [login, domain] = email.split('@');
+async function getOTP(emailData, maxRetries = 30) {
+  const { email, token } = emailData;
   
   console.log('⏳ Waiting for OTP email (max 3 minutes)...');
   
   for (let i = 0; i < maxRetries; i++) {
     try {
-      // Get inbox
-      const res = await axios.get(`${API_BASE}?action=getMessages&login=${login}&domain=${domain}`);
-      const messages = res.data;
+      // Get messages
+      const res = await axios.get(`${API_BASE}/messages`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      const messages = res.data['hydra:member'];
       
       if (messages && messages.length > 0) {
         // Get latest message
         const msgId = messages[0].id;
-        const msgRes = await axios.get(`${API_BASE}?action=readMessage&login=${login}&domain=${domain}&id=${msgId}`);
-        const body = msgRes.data.textBody || msgRes.data.body || '';
+        const msgRes = await axios.get(`${API_BASE}/messages/${msgId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const body = msgRes.data.text || msgRes.data.html || '';
         
         // Extract OTP (6 digits)
         const otpMatch = body.match(/\b(\d{6})\b/);
