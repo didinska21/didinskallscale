@@ -326,14 +326,14 @@ async function checkInbox(provider, axiosInstance, emailData, maxAttempts = 15, 
 // === NEW OTP-BASED REGISTRATION ===
 
 async function sendOTPCode(axiosInstance, email, refCode) {
-  // Coba beberapa endpoint yang mungkin
+  // Endpoint yang lebih mungkin berdasarkan DevTools screenshot
   const endpoints = [
+    { url: 'https://app.allscale.io/pay/register/send_email_otp', data: { email, referrer_id: refCode } },
+    { url: 'https://app.allscale.io/api/send_email_otp', data: { email, referrer_id: refCode } },
+    { url: 'https://dashboard.allscale.io/api/send_email_otp', data: { email, referrer_id: refCode } },
+    { url: 'https://app.allscale.io/send_email_otp', data: { email, referrer_id: refCode } },
+    { url: 'https://dashboard.allscale.io/pay/register/send_email_otp', data: { email, referrer_id: refCode } },
     { url: 'https://dashboard.allscale.io/api/public/send/verification/mail', data: { email, referrer_id: refCode } },
-    { url: 'https://dashboard.allscale.io/api/send/verification/mail', data: { email, referrer_id: refCode } },
-    { url: 'https://dashboard.allscale.io/api/public/verification/send', data: { email, referrer_id: refCode } },
-    { url: 'https://dashboard.allscale.io/api/public/otp/send', data: { email, referrer_id: refCode } },
-    { url: 'https://dashboard.allscale.io/api/v1/auth/send-otp', data: { email, referrer_id: refCode } },
-    { url: 'https://dashboard.allscale.io/api/auth/send-verification', data: { email, referral_code: refCode } },
   ];
   
   console.log(`${YELLOW}Trying to send OTP...${RESET}`);
@@ -364,11 +364,10 @@ async function sendOTPCode(axiosInstance, email, refCode) {
   
   console.log(`${RED}${BOLD}All endpoints failed. Please check the correct endpoint manually.${RESET}\n`);
   console.log(`${CYAN}${BOLD}Instructions:${RESET}`);
-  console.log(`1. Open https://dashboard.allscale.io/signup in browser`);
-  console.log(`2. Open DevTools (F12) > Network tab`);
-  console.log(`3. Enter email and click 'Send OTP' button`);
-  console.log(`4. Look for the request in Network tab`);
-  console.log(`5. Copy the URL and request payload\n`);
+  console.log(`1. Click on 'send_email_otp' request in DevTools`);
+  console.log(`2. Check the full URL in Headers tab`);
+  console.log(`3. Check the Request Payload/Body`);
+  console.log(`4. Share the URL and payload format\n`);
   
   return false;
 }
