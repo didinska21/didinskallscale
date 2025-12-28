@@ -326,34 +326,39 @@ async function checkInbox(provider, axiosInstance, emailData, maxAttempts = 15, 
 // === NEW OTP-BASED REGISTRATION ===
 
 async function sendOTPCode(axiosInstance, email, refCode) {
-  // FIXED: Ganti ke endpoint PUBLIC dan hapus authorization header
-  const url = 'https://dashboard.allscale.io/api/public/misc/send/verification/mail';
-  const data = { 
-    email: email,
-    referrer_id: refCode
-  };
-  const headers = getGlobalHeaders(url, refCode);
-  // TIDAK pakai authorization header untuk registrasi baru
+  // Coba beberapa endpoint yang mungkin
+  const endpoints = [
+    'https://dashboard.allscale.io/api/public/send/verification/mail',
+    'https://dashboard.allscale.io/api/send/verification/mail',
+    'https://dashboard.allscale.io/api/public/verification/send',
+    'https://dashboard.allscale.io/api/public/otp/send'
+  ];
   
   const spinner = createSpinner('Sending OTP code...');
   spinner.start();
   
-  try {
-    const response = await axiosInstance.post(url, data, { headers });
-    
-    if (response.data.code === 0) {
-      spinner.succeed('OTP code sent successfully');
-      return true;
-    } else {
-      throw new Error('Server error: ' + JSON.stringify(response.data));
+  for (const url of endpoints) {
+    try {
+      const data = { 
+        email: email,
+        referrer_id: refCode
+      };
+      const headers = getGlobalHeaders(url, refCode);
+      
+      const response = await axiosInstance.post(url, data, { headers });
+      
+      if (response.data.code === 0 || response.status === 200) {
+        spinner.succeed(`OTP code sent successfully via ${url}`);
+        return true;
+      }
+    } catch (error) {
+      // Coba endpoint berikutnya
+      continue;
     }
-  } catch (error) {
-    const errorMsg = error.response ? 
-      JSON.stringify(error.response.data) : 
-      error.message;
-    spinner.fail('Failed to send OTP: ' + errorMsg);
-    return false;
   }
+  
+  spinner.fail('Failed to send OTP from all endpoints');
+  return false;
 }
 
 async function verifyOTPAndRegister(axiosInstance, email, otpCode, refCode, userAgent, ipAddress) {
