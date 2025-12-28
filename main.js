@@ -326,13 +326,14 @@ async function checkInbox(provider, axiosInstance, emailData, maxAttempts = 15, 
 // === NEW OTP-BASED REGISTRATION ===
 
 async function sendOTPCode(axiosInstance, email, refCode) {
-  const url = 'https://dashboard.allscale.io/api/secure/misc/send/verification/mail';
-  const data = { email: email };
-  const headers = {
-    ...getGlobalHeaders(url, ''),
-    'authorization': `Bearer ${refCode}`,
-    'referer': 'https://dashboard.allscale.io/pay'
+  // FIXED: Ganti ke endpoint PUBLIC dan hapus authorization header
+  const url = 'https://dashboard.allscale.io/api/public/misc/send/verification/mail';
+  const data = { 
+    email: email,
+    referrer_id: refCode
   };
+  const headers = getGlobalHeaders(url, refCode);
+  // TIDAK pakai authorization header untuk registrasi baru
   
   const spinner = createSpinner('Sending OTP code...');
   spinner.start();
@@ -350,7 +351,7 @@ async function sendOTPCode(axiosInstance, email, refCode) {
     const errorMsg = error.response ? 
       JSON.stringify(error.response.data) : 
       error.message;
-    spinner.fail(' Failed to send OTP: ' + errorMsg);
+    spinner.fail('Failed to send OTP: ' + errorMsg);
     return false;
   }
 }
@@ -387,7 +388,7 @@ async function verifyOTPAndRegister(axiosInstance, email, otpCode, refCode, user
     const errorMsg = error.response ? 
       JSON.stringify(error.response.data) : 
       error.message;
-    spinner.fail(' Failed to register: ' + errorMsg);
+    spinner.fail('Failed to register: ' + errorMsg);
     return { success: false };
   }
 }
