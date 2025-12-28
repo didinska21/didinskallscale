@@ -181,6 +181,60 @@ async function register() {
     const currentUrlAfterSubmit = page.url();
     log(`📍 Current URL after submit: ${currentUrlAfterSubmit}`);
     
+    // Check for Cloudflare Turnstile challenge
+    log('🔍 Checking for Cloudflare challenge...');
+    const hasTurnstile = await page.evaluate(() => {
+      return document.querySelector('iframe[src*="cloudflare"]') !== null ||
+             document.querySelector('[id*="turnstile"]') !== null ||
+             document.querySelector('[name*="cf-turnstile"]') !== null;
+    });
+    
+    if (hasTurnstile) {
+      log('🤖 Cloudflare Turnstile detected, waiting for solve...');
+      
+      // Wait for turnstile iframe
+      await page.waitForSelector('iframe[src*="cloudflare"]', { timeout: 10000 }).catch(() => {});
+      
+      // Try to click the checkbox
+      try {
+        const frame = page.frames().find(f => f.url().includes('cloudflare'));
+        if (frame) {
+          await sleep(2000);
+          // Click turnstile checkbox
+          await frame.evaluate(() => {
+            const checkbox = document.querySelector('input[type="checkbox"]');
+            if (checkbox) checkbox.click();
+          });
+          log('✅ Clicked Turnstile checkbox');
+        }
+      } catch (e) {
+        log('⚠️ Could not auto-click Turnstile, waiting for manual solve...');
+      }
+      
+      // Wait for turnstile to be solved (max 60 seconds)
+      log('⏳ Waiting for Turnstile verification (max 60s)...');
+      for (let i = 0; i < 60; i++) {
+        const solved = await page.evaluate(() => {
+          const input = document.querySelector('input[name="cf-turnstile-response"]');
+          return input && input.value && input.value.length > 0;
+        });
+        
+        if (solved) {
+          log('✅ Turnstile solved!');
+          break;
+        }
+        
+        await sleep(1000);
+        
+        if ((i + 1) % 10 === 0) {
+          log(`⏳ Still waiting for Turnstile... (${i + 1}s)`);
+        }
+      }
+      
+      await sleep(2000);
+      await page.screenshot({ path: 'step3-after-turnstile.png' });
+    }
+    
     // Check if there's any error message
     const errorMsg = await page.evaluate(() => {
       const errorElements = document.querySelectorAll('[class*="error"], [class*="alert"], [role="alert"]');
