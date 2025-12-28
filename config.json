@@ -1,3 +1,8 @@
 {
-  "referral_code": "z5FxDYNaye7bkwpF5nfan-3FBXuKmUfFM_yFDJs3uikNKLDkMxUf4Iy4_3AyH0M5yyMv3A=="
+  "referral_code": "z5FxDYNaye7bkwpF5nfan-3FBXuKmUfFM_yFDJs3uikNKLDkMxUf4Iy4_3AyH0M5yyMv3A==",
+  "proxy_mode": "none",
+  "proxy": {
+    "static": "http://user:pass@ip:port",
+    "rotating": "http://user:pass@rotating-proxy.com:port"
+  }
 }
