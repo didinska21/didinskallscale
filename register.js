@@ -119,7 +119,8 @@ puppeteer.use(StealthPlugin());
 
   } catch (err) {
     logError("REGISTER_MAIN", err);
-    console.log("❌ REGISTER FAILED – Check error.log");
+    console.log("❌ REGISTER FAILED");
+    console.log("Error:", err.message);
     process.exit(1);
   }
 })();
