@@ -234,31 +234,30 @@ async function registerAllscale() {
     await delay(1000);
     await page.screenshot({ path: 'step2-email-filled.png' });
 
-    // Cari dan klik tombol "Login with Email" (bukan "Login with Passkey")
-    console.log('🔍 Mencari tombol Login with Email...');
+    // Cari dan klik tombol "Create with Email" (BUKAN "Continue with Passkey")
+    console.log('🔍 Mencari tombol Create with Email...');
     await delay(2000);
     
     // Screenshot sebelum klik
     await page.screenshot({ path: 'step2b-before-click.png' });
     
-    // Coba beberapa cara untuk klik tombol
+    // Klik tombol "Create with Email" yang ada di bawah
     let buttonClicked = false;
     
-    // Cara 1: Cari tombol dengan text
     try {
       const clicked = await page.evaluate(() => {
-        const buttons = Array.from(document.querySelectorAll('button, [role="button"], a'));
-        const targetBtn = buttons.find(btn => {
-          const text = btn.textContent.toLowerCase();
-          return text.includes('login with email') ||
-                 text.includes('continue with email') ||
-                 text.includes('send') ||
-                 text.includes('continue') ||
-                 text.includes('submit');
+        // Cari semua elemen yang bisa diklik
+        const allClickable = Array.from(document.querySelectorAll('button, [role="button"], a, div[class*="button"]'));
+        
+        // Cari tombol "Create with Email"
+        const emailBtn = allClickable.find(el => {
+          const text = el.textContent.toLowerCase().trim();
+          return text.includes('create with email') || 
+                 (text.includes('email') && !text.includes('passkey'));
         });
         
-        if (targetBtn) {
-          targetBtn.click();
+        if (emailBtn) {
+          emailBtn.click();
           return true;
         }
         return false;
@@ -266,17 +265,56 @@ async function registerAllscale() {
       
       if (clicked) {
         buttonClicked = true;
-        console.log('✅ Tombol diklik (method 1)');
+        console.log('✅ Tombol "Create with Email" diklik');
       }
     } catch (e) {
       console.log('⚠️ Method 1 gagal:', e.message);
     }
     
-    // Cara 2: Tekan Enter
+    // Fallback: coba cari dengan XPath atau selector lain
     if (!buttonClicked) {
-      await page.keyboard.press('Enter');
-      buttonClicked = true;
-      console.log('✅ Menggunakan Enter (method 2)');
+      try {
+        // Cari button dengan ikon envelope/email
+        await page.click('button:has-text("Create with Email"), button:has-text("Email")');
+        buttonClicked = true;
+        console.log('✅ Button diklik (method 2)');
+      } catch (e) {
+        console.log('⚠️ Method 2 gagal');
+      }
+    }
+    
+    if (!buttonClicked) {
+      console.log('⚠️ Tombol tidak ditemukan, mencoba scroll dan cari lagi...');
+      await page.evaluate(() => window.scrollBy(0, 200));
+      await delay(1000);
+      
+      // Screenshot after scroll
+      await page.screenshot({ path: 'step2c-after-scroll.png' });
+      
+      // Try clicking any button with "email" in text that's NOT passkey
+      const finalAttempt = await page.evaluate(() => {
+        const buttons = Array.from(document.querySelectorAll('*'));
+        const target = buttons.find(el => {
+          const text = el.textContent.toLowerCase();
+          const isVisible = el.offsetParent !== null;
+          return isVisible && text.includes('email') && !text.includes('passkey');
+        });
+        
+        if (target) {
+          target.click();
+          return true;
+        }
+        return false;
+      });
+      
+      if (finalAttempt) {
+        buttonClicked = true;
+        console.log('✅ Button diklik (final attempt)');
+      }
+    }
+    
+    if (!buttonClicked) {
+      console.log('⚠️ Tidak bisa menemukan tombol, akan lanjut ke email check...');
     }
 
     await delay(3000);
