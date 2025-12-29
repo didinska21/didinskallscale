@@ -25,6 +25,7 @@ async function createGuerrillaMailClient() {
 
   const email = response.data.email_addr;
   const sid = response.data.sid_token;
+  headless: true  // atau 'new'
 
   return {
     email,
