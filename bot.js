@@ -1,4 +1,4 @@
-// bot.js
+// bot.js - Enhanced Version with Advanced Cloudflare Bypass
 import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { config } from 'dotenv';
@@ -9,29 +9,73 @@ config();
 puppeteer.use(StealthPlugin());
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const randomDelay = (min, max) => delay(Math.floor(Math.random() * (max - min + 1)) + min);
+
+// ===== ENHANCED STEALTH FUNCTIONS =====
+async function setupEnhancedStealth(page) {
+  // Remove webdriver traces
+  await page.evaluateOnNewDocument(() => {
+    Object.defineProperty(navigator, 'webdriver', {
+      get: () => undefined,
+    });
+    
+    // Mock plugins
+    Object.defineProperty(navigator, 'plugins', {
+      get: () => [1, 2, 3, 4, 5],
+    });
+    
+    // Mock languages
+    Object.defineProperty(navigator, 'languages', {
+      get: () => ['en-US', 'en'],
+    });
+    
+    // Chrome runtime
+    window.chrome = {
+      runtime: {},
+    };
+    
+    // Permissions
+    const originalQuery = window.navigator.permissions.query;
+    window.navigator.permissions.query = (parameters) => (
+      parameters.name === 'notifications' ?
+        Promise.resolve({ state: Notification.permission }) :
+        originalQuery(parameters)
+    );
+  });
+}
+
+// Simulate human mouse movements
+async function humanMouseMove(page) {
+  const dimensions = await page.evaluate(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight
+  }));
+  
+  for (let i = 0; i < 3; i++) {
+    const x = Math.floor(Math.random() * dimensions.width);
+    const y = Math.floor(Math.random() * dimensions.height);
+    await page.mouse.move(x, y, { steps: 10 });
+    await randomDelay(100, 300);
+  }
+}
 
 // ===== TEMP MAIL CLIENTS =====
-// Mail.tm - Reliable temp mail service
 async function createMailTmClient() {
   const baseURL = 'https://api.mail.tm';
   
-  // Generate random email
   const randomString = Math.random().toString(36).substring(2, 10);
   
-  // Get available domains
   const domainsRes = await axios.get(`${baseURL}/domains`);
   const domain = domainsRes.data['hydra:member'][0].domain;
   
   const email = `${randomString}@${domain}`;
   const password = Math.random().toString(36).substring(2, 15);
   
-  // Create account
   await axios.post(`${baseURL}/accounts`, {
     address: email,
     password: password
   });
   
-  // Get token
   const tokenRes = await axios.post(`${baseURL}/token`, {
     address: email,
     password: password
@@ -47,9 +91,7 @@ async function createMailTmClient() {
     async checkEmail() {
       try {
         const res = await axios.get(`${baseURL}/messages`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          headers: { 'Authorization': `Bearer ${token}` }
         });
         return res.data['hydra:member'] || [];
       } catch (e) {
@@ -59,24 +101,18 @@ async function createMailTmClient() {
     
     async getEmailBody(emailId) {
       const res = await axios.get(`${baseURL}/messages/${emailId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       return res.data;
     }
   };
 }
 
-// TempMail.lol - Simple fallback
 async function createTempMailLolClient() {
   const baseURL = 'https://api.tempmail.lol';
   
-  // Generate inbox
   const response = await axios.post(`${baseURL}/generate/rush`, {}, {
-    headers: {
-      'Content-Type': 'application/json'
-    }
+    headers: { 'Content-Type': 'application/json' }
   });
 
   const email = response.data.address;
@@ -97,7 +133,7 @@ async function createTempMailLolClient() {
   };
 }
 
-// ===== CLOUDFLARE BYPASS =====
+// ===== ENHANCED CLOUDFLARE BYPASS =====
 async function waitForCloudflareBypass(page, timeout = 60000) {
   console.log('⏳ Menunggu Cloudflare bypass...');
   const startTime = Date.now();
@@ -107,7 +143,6 @@ async function waitForCloudflareBypass(page, timeout = 60000) {
       const title = await page.title();
       const url = page.url();
       
-      // Cek apakah masih di halaman Cloudflare
       if (!title.includes('Just a moment') && 
           !url.includes('cdn-cgi/challenge-platform')) {
         console.log('✅ Cloudflare bypass berhasil!');
@@ -123,34 +158,69 @@ async function waitForCloudflareBypass(page, timeout = 60000) {
   throw new Error('Cloudflare bypass timeout');
 }
 
-// Tunggu Cloudflare Turnstile challenge selesai
-async function waitForTurnstileComplete(page, timeout = 120000) {
-  console.log('⏳ Menunggu Cloudflare Turnstile challenge...');
+// ENHANCED: Smart Turnstile Handler dengan multiple strategies
+async function waitForTurnstileComplete(page, timeout = 180000) {
+  console.log('🛡️ Menunggu Cloudflare Turnstile dengan smart detection...');
   const startTime = Date.now();
+  let lastStrategy = '';
   
   while (Date.now() - startTime < timeout) {
     try {
-      // Cek apakah ada iframe Cloudflare Turnstile
-      const hasTurnstile = await page.evaluate(() => {
-        const iframe = document.querySelector('iframe[src*="cloudflare"]');
-        return iframe !== null;
+      // Strategy 1: Check if Turnstile iframe exists
+      const turnstileState = await page.evaluate(() => {
+        const iframe = document.querySelector('iframe[src*="cloudflare"], iframe[src*="turnstile"]');
+        if (!iframe) return 'no_turnstile';
+        
+        // Check if challenge is in progress
+        const verifyingText = document.body.innerText.toLowerCase();
+        if (verifyingText.includes('verifying')) return 'verifying';
+        
+        return 'has_turnstile';
       });
       
-      if (!hasTurnstile) {
-        console.log('✅ Turnstile challenge selesai atau tidak ada');
+      if (turnstileState === 'no_turnstile') {
+        console.log('✅ Turnstile tidak ditemukan atau sudah selesai');
         return true;
       }
       
-      // Cek apakah sudah ada teks "verifying"
-      const pageText = await page.evaluate(() => document.body.innerText.toLowerCase());
+      // Strategy 2: Simulate human behavior
+      if (turnstileState === 'verifying' && lastStrategy !== 'mouse_move') {
+        console.log('🖱️ Simulasi gerakan mouse...');
+        await humanMouseMove(page);
+        lastStrategy = 'mouse_move';
+      }
       
-      if (pageText.includes('verifying')) {
-        console.log('🔄 Turnstile sedang memverifikasi...');
+      // Strategy 3: Check for success indicators
+      const hasSuccessIndicators = await page.evaluate(() => {
+        const text = document.body.innerText.toLowerCase();
+        return text.includes('verify to receive') || 
+               text.includes('enter the code') ||
+               text.includes('check your email');
+      });
+      
+      if (hasSuccessIndicators) {
+        console.log('✅ Turnstile berhasil - halaman verifikasi muncul');
+        return true;
+      }
+      
+      // Strategy 4: Check URL change
+      const currentUrl = page.url();
+      if (!currentUrl.includes('register') && !currentUrl.includes('challenge')) {
+        console.log('✅ Turnstile berhasil - URL berubah');
+        return true;
+      }
+      
+      // Strategy 5: Wait and retry
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      if (elapsed % 10 === 0) {
+        console.log(`⏱️ Turnstile progress: ${elapsed}s / ${timeout/1000}s`);
       }
       
       await delay(2000);
+      
     } catch (error) {
-      console.log('Error checking Turnstile:', error.message);
+      console.log('⚠️ Error checking Turnstile:', error.message);
+      await delay(2000);
     }
   }
   
@@ -158,10 +228,57 @@ async function waitForTurnstileComplete(page, timeout = 120000) {
   return false;
 }
 
+// ===== PROXY HANDLER (FIXED) =====
+function parseProxy(proxyString) {
+  if (!proxyString || proxyString.trim() === '') {
+    return null;
+  }
+  
+  try {
+    // Format: user:pass@hostname:port atau hostname:port
+    const hasAuth = proxyString.includes('@');
+    
+    if (hasAuth) {
+      const [auth, hostPort] = proxyString.split('@');
+      const [username, password] = auth.split(':');
+      const [hostname, port] = hostPort.split(':');
+      
+      if (!hostname || !port) {
+        throw new Error('Invalid proxy format');
+      }
+      
+      return {
+        server: `${hostname}:${port}`,
+        username,
+        password
+      };
+    } else {
+      // Format: hostname:port (no auth)
+      const [hostname, port] = proxyString.split(':');
+      
+      if (!hostname || !port) {
+        throw new Error('Invalid proxy format');
+      }
+      
+      return {
+        server: `${hostname}:${port}`,
+        username: null,
+        password: null
+      };
+    }
+  } catch (error) {
+    console.error('❌ Error parsing proxy:', error.message);
+    console.log('💡 Format proxy yang benar:');
+    console.log('   - Dengan auth: user:pass@hostname:port');
+    console.log('   - Tanpa auth: hostname:port');
+    return null;
+  }
+}
+
 // ===== MAIN REGISTRATION FUNCTION =====
 async function registerAllscale() {
   const referralCode = process.env.REFERRAL_CODE;
-  const proxyString = process.env.PROXY; // format: user:pass@hostname:port
+  const proxyString = process.env.PROXY;
   
   if (!referralCode) {
     throw new Error('REFERRAL_CODE tidak ditemukan di .env');
@@ -171,9 +288,8 @@ async function registerAllscale() {
   let emailClient;
 
   try {
-    // Setup Temp Mail dengan fallback
+    // Setup Temp Mail
     console.log('📧 Setup email temporary...');
-    let emailClient;
     let email;
     
     try {
@@ -192,6 +308,9 @@ async function registerAllscale() {
       }
     }
 
+    // Parse proxy
+    const proxyConfig = parseProxy(proxyString);
+
     // Browser options
     const launchOptions = {
       headless: 'new',
@@ -204,21 +323,19 @@ async function registerAllscale() {
         '--disable-features=IsolateOrigins,site-per-process',
         '--disable-gpu',
         '--disable-dev-shm-usage',
+        '--window-size=1280,800',
+        // Additional stealth args
+        '--disable-infobars',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
       ]
     };
 
-    // Tambahkan proxy jika ada
-    if (proxyString && proxyString.trim() !== '') {
-      try {
-        const [auth, hostPort] = proxyString.split('@');
-        const [user, pass] = auth.split(':');
-        const [hostname, port] = hostPort.split(':');
-        
-        launchOptions.args.push(`--proxy-server=http://${hostname}:${port}`);
-        console.log(`🌐 Menggunakan proxy: ${hostname}:${port}`);
-      } catch (proxyError) {
-        console.log('⚠️ Format proxy salah, melanjutkan tanpa proxy');
-      }
+    // Add proxy if configured
+    if (proxyConfig) {
+      launchOptions.args.push(`--proxy-server=${proxyConfig.server}`);
+      console.log(`🌐 Menggunakan proxy: ${proxyConfig.server}`);
     } else {
       console.log('ℹ️ Tidak menggunakan proxy');
     }
@@ -227,23 +344,29 @@ async function registerAllscale() {
     browser = await puppeteer.launch(launchOptions);
     const page = await browser.newPage();
 
-    // Authenticate proxy jika ada
-    if (proxyString && proxyString.trim() !== '') {
-      try {
-        const [auth] = proxyString.split('@');
-        const [user, pass] = auth.split(':');
-        await page.authenticate({ username: user, password: pass });
-        console.log('✅ Proxy authentication berhasil');
-      } catch (authError) {
-        console.log('⚠️ Proxy authentication gagal, melanjutkan...');
-      }
+    // Authenticate proxy if needed
+    if (proxyConfig && proxyConfig.username && proxyConfig.password) {
+      await page.authenticate({ 
+        username: proxyConfig.username, 
+        password: proxyConfig.password 
+      });
+      console.log('✅ Proxy authentication berhasil');
     }
+
+    // Setup enhanced stealth
+    await setupEnhancedStealth(page);
 
     // Set viewport dan user agent
     await page.setViewport({ width: 1280, height: 800 });
     await page.setUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     );
+
+    // Extra headers untuk lebih natural
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    });
 
     // Buka halaman register
     const registerUrl = `https://app.allscale.io/pay/register?code=${referralCode}`;
@@ -252,24 +375,32 @@ async function registerAllscale() {
 
     // Bypass Cloudflare
     await waitForCloudflareBypass(page);
-    await delay(2000);
+    await randomDelay(2000, 4000);
 
-    // Screenshot untuk debugging
+    // Human-like behavior
+    await humanMouseMove(page);
+
+    // Screenshot
     await page.screenshot({ path: 'step1-loaded.png' });
 
     // Tunggu dan isi email
     console.log('📝 Mengisi form email...');
     await page.waitForSelector('input[type="email"], input[name="email"]', { timeout: 30000 });
-    await delay(1000);
+    await randomDelay(800, 1500);
     
     const emailInput = await page.$('input[type="email"], input[name="email"]');
     await emailInput.click({ clickCount: 3 });
-    await emailInput.type(email, { delay: 100 });
+    await randomDelay(300, 600);
     
-    await delay(1000);
+    // Type dengan delay random seperti manusia
+    for (const char of email) {
+      await emailInput.type(char, { delay: Math.random() * 50 + 50 });
+    }
+    
+    await randomDelay(1000, 2000);
     await page.screenshot({ path: 'step2-email-filled.png' });
 
-    // CEK DAN CENTANG CHECKBOX TERMS/PRIVACY
+    // Centang checkbox
     console.log('🔍 Mencari dan centang checkbox...');
     const checkboxFound = await page.evaluate(() => {
       const checkboxes = Array.from(document.querySelectorAll('input[type="checkbox"]'));
@@ -292,53 +423,85 @@ async function registerAllscale() {
     
     if (checkboxFound) {
       console.log('✅ Checkbox terms dicentang');
-      await delay(1500);
+      await randomDelay(1000, 2000);
       await page.screenshot({ path: 'step2b-checkbox.png' });
     }
 
-    // Klik button "Create with Email"
+    // Klik button dengan retry logic
     console.log('🔍 Mencari button "Create with Email"...');
-    const buttonClicked = await page.evaluate(() => {
-      const allButtons = Array.from(document.querySelectorAll('button, [role="button"]'));
+    let clickAttempts = 0;
+    let buttonClicked = false;
+    
+    while (!buttonClicked && clickAttempts < 3) {
+      clickAttempts++;
       
-      for (const btn of allButtons) {
-        const text = btn.textContent.toLowerCase().trim();
+      buttonClicked = await page.evaluate(() => {
+        const allButtons = Array.from(document.querySelectorAll('button, [role="button"]'));
         
-        if (text.includes('create with email') || 
-            (text.includes('create') && text.includes('email'))) {
+        for (const btn of allButtons) {
+          const text = btn.textContent.toLowerCase().trim();
           
-          if (btn.disabled) {
-            return false;
+          if (text.includes('create with email') || 
+              (text.includes('create') && text.includes('email'))) {
+            
+            if (btn.disabled) {
+              return false;
+            }
+            
+            btn.click();
+            return true;
           }
-          
-          btn.click();
-          return true;
         }
+        return false;
+      });
+      
+      if (!buttonClicked) {
+        console.log(`⚠️ Attempt ${clickAttempts}: Button tidak ditemukan atau disabled, retry...`);
+        await randomDelay(1500, 2500);
       }
-      return false;
-    });
+    }
     
     if (buttonClicked) {
       console.log('✅ Button "Create with Email" diklik!');
     } else {
-      throw new Error('Button tidak ditemukan atau disabled');
+      throw new Error('Button tidak bisa diklik setelah 3 attempts');
     }
 
-    await delay(3000);
+    await randomDelay(3000, 5000);
     await page.screenshot({ path: 'step3-after-click.png' });
 
-    // Tunggu Cloudflare Turnstile selesai
-    console.log('🛡️ Menunggu Cloudflare Turnstile...');
-    await waitForTurnstileComplete(page, 120000);
-    await delay(5000); // Beri waktu ekstra untuk email dikirim
-
+    // ENHANCED: Smart Turnstile handler
+    console.log('🛡️ Menangani Cloudflare Turnstile dengan smart detection...');
+    const turnstileSuccess = await waitForTurnstileComplete(page, 180000);
+    
+    if (!turnstileSuccess) {
+      console.log('⚠️ Turnstile mungkin tidak selesai sempurna, tapi melanjutkan...');
+    }
+    
+    await randomDelay(5000, 8000);
     await page.screenshot({ path: 'step4-post-turnstile.png' });
 
-    // Tunggu OTP dari email dengan waktu lebih lama
-    console.log('📬 Menunggu OTP dari email (bisa memakan waktu 1-2 menit)...');
+    // Check apakah sudah di halaman verifikasi
+    const isVerificationPage = await page.evaluate(() => {
+      const text = document.body.innerText.toLowerCase();
+      return text.includes('verify to receive') || 
+             text.includes('enter the code') ||
+             text.includes('check your email');
+    });
+    
+    if (!isVerificationPage) {
+      console.log('⚠️ Belum sampai halaman verifikasi, mungkin Turnstile gagal');
+      console.log('💡 Coba lagi atau gunakan headless: false untuk debug manual');
+      throw new Error('Gagal melewati Turnstile - tidak sampai halaman verifikasi');
+    }
+    
+    console.log('✅ Berhasil sampai halaman verifikasi!');
+
+    // Tunggu OTP dengan waktu lebih lama
+    console.log('📬 Menunggu OTP dari email (max 3 menit)...');
     let otp = null;
     let attempts = 0;
-    const maxAttempts = 60; // 3 menit (60 x 3 detik)
+    const maxAttempts = 60;
 
     while (!otp && attempts < maxAttempts) {
       await delay(3000);
@@ -369,7 +532,7 @@ async function registerAllscale() {
               body = mail.text || mail.intro || mail.body || '';
             }
             
-            console.log(`   📄 Body: ${body.substring(0, 150)}...`);
+            console.log(`   📄 Body snippet: ${body.substring(0, 150)}...`);
             
             const patterns = [
               /\b(\d{6})\b/,
@@ -392,23 +555,22 @@ async function registerAllscale() {
           }
         }
       } catch (emailError) {
-        console.log(`⚠️ Error: ${emailError.message}`);
+        console.log(`⚠️ Error cek email: ${emailError.message}`);
       }
     }
 
     if (!otp) {
-      console.log('❌ OTP tidak ditemukan setelah menunggu.');
-      console.log('💡 Kemungkinan penyebab:');
-      console.log('   1. Cloudflare Turnstile tidak selesai');
-      console.log('   2. Email provider diblokir oleh Allscale');
-      console.log('   3. Rate limit dari Allscale');
-      console.log('📸 Cek screenshot step4-post-turnstile.png');
-      throw new Error('OTP tidak diterima - Turnstile mungkin gagal');
+      console.log('❌ OTP tidak ditemukan setelah 3 menit.');
+      console.log('💡 Kemungkinan:');
+      console.log('   1. Turnstile tidak diselesaikan dengan benar');
+      console.log('   2. Email belum terkirim (coba wait lebih lama)');
+      console.log('   3. Email provider diblokir');
+      throw new Error('OTP tidak diterima');
     }
 
     // Input OTP
     console.log('🔢 Memasukkan OTP...');
-    await delay(2000);
+    await randomDelay(2000, 3000);
     
     const otpInputs = await page.$$('input[type="text"], input[type="number"], input[inputmode="numeric"]');
     
@@ -422,7 +584,7 @@ async function registerAllscale() {
       throw new Error('Format input OTP tidak dikenali');
     }
 
-    await delay(2000);
+    await randomDelay(2000, 3000);
     await page.screenshot({ path: 'step5-otp-filled.png' });
 
     // Submit OTP
@@ -449,20 +611,24 @@ async function registerAllscale() {
     console.log(`📍 URL final: ${finalUrl}`);
 
     if (finalUrl.includes('dashboard') || finalUrl.includes('home') || !finalUrl.includes('register')) {
-      console.log('🎉 Registrasi berhasil!');
+      console.log('🎉 REGISTRASI BERHASIL!');
       console.log(`📧 Email: ${email}`);
+      console.log(`🔗 Referral Code: ${referralCode}`);
     } else {
-      console.log('⚠️ Status tidak pasti, cek screenshot');
+      console.log('⚠️ Status tidak pasti, cek screenshot step6-final.png');
     }
 
     await delay(3000);
 
   } catch (error) {
-    console.error('❌ Error:', error.message);
+    console.error('❌ ERROR:', error.message);
+    console.error('Stack:', error.stack);
+    
     if (browser) {
       const pages = await browser.pages();
       if (pages[0]) {
         await pages[0].screenshot({ path: 'error-screenshot.png' });
+        console.log('📸 Error screenshot saved: error-screenshot.png');
       }
     }
     throw error;
@@ -474,4 +640,10 @@ async function registerAllscale() {
 }
 
 // ===== JALANKAN BOT =====
-registerAllscale().catch(console.error);
+console.log('🤖 AllScale Auto Register Bot - Enhanced Version');
+console.log('🛡️ With Advanced Cloudflare Turnstile Bypass\n');
+
+registerAllscale().catch(error => {
+  console.error('\n💥 Bot failed:', error.message);
+  process.exit(1);
+});
