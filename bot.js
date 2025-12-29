@@ -104,7 +104,7 @@ async function registerAllscale() {
     // Browser options
     const launchOptions = {
       headless: false,
-      executablePath: '/usr/bin/chromium',
+      executablePath: '/usr/bin/chromium-browser', // Path yang sudah ditemukan
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
