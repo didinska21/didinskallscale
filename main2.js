@@ -4,7 +4,6 @@ const axios = require('axios');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const cfonts = require('cfonts');
 const UserAgent = require('user-agents');
-const crypto = require('crypto');
 
 // Color codes
 const RESET = '\x1b[0m';
@@ -317,9 +316,9 @@ async function getIpAddress(axiosInstance) {
   }
 }
 
-// ==================== ALLSCALE API FUNCTIONS ====================
+// ==================== ALLSCALE API FUNCTIONS (UPDATED) ====================
 
-async function sendOtp(axiosInstance, email, referralCode, userAgent) {
+async function sendOtp(axiosInstance, email, userAgent) {
   const endpoint = 'https://app.allscale.io/api/public/turnkey/send_email_otp';
   const timestamp = Math.floor(Date.now() / 1000);
   
@@ -334,7 +333,7 @@ async function sendOtp(axiosInstance, email, referralCode, userAgent) {
     'accept-language': 'en-US,en;q=0.9',
     'content-type': 'application/json',
     'origin': 'https://app.allscale.io',
-    'referer': `https://app.allscale.io/pay/register?code=${referralCode}`,
+    'referer': 'https://app.allscale.io/pay/register',
     'sec-ch-ua': '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
     'sec-ch-ua-mobile': '?1',
     'sec-ch-ua-platform': '"Android"',
@@ -342,6 +341,7 @@ async function sendOtp(axiosInstance, email, referralCode, userAgent) {
     'sec-fetch-mode': 'cors',
     'sec-fetch-site': 'same-origin',
     'user-agent': userAgent,
+    // TODO: Update secret-key jika diperlukan dari DevTools
     'secret-key': '6fd572c8807298a8086bea02fd8c7e577751b60b3437133bf01fe7f2d3c15a47',
     'timestamp': timestamp.toString()
   };
@@ -354,9 +354,10 @@ async function sendOtp(axiosInstance, email, referralCode, userAgent) {
     
     if (response.data.code === 0) {
       spinner.succeed('OTP sent successfully');
+      // PERUBAHAN: response.data.data sekarang langsung string otp_id
       return {
         success: true,
-        otp_id: response.data.data.otp_id
+        otp_id: response.data.data
       };
     } else {
       throw new Error(`Server error: ${JSON.stringify(response.data)}`);
@@ -370,15 +371,15 @@ async function sendOtp(axiosInstance, email, referralCode, userAgent) {
   }
 }
 
-async function verifyOtp(axiosInstance, email, otpCode, otpId, referralCode, userAgent) {
+async function verifyOtp(axiosInstance, email, otpCode, otpId, userAgent) {
   const endpoint = 'https://app.allscale.io/api/public/turnkey/email_otp_auth';
   const timestamp = Math.floor(Date.now() / 1000);
   
+  // PERUBAHAN: referer_id (referral code) dihapus
   const payload = {
     email: email,
-    otp_code: otpCode,
     otp_id: otpId,
-    referer_id: referralCode
+    otp_code: otpCode
   };
   
   const headers = {
@@ -387,7 +388,7 @@ async function verifyOtp(axiosInstance, email, otpCode, otpId, referralCode, use
     'accept-language': 'en-US,en;q=0.9',
     'content-type': 'application/json',
     'origin': 'https://app.allscale.io',
-    'referer': `https://app.allscale.io/pay/register?code=${referralCode}`,
+    'referer': 'https://app.allscale.io/pay/register',
     'sec-ch-ua': '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
     'sec-ch-ua-mobile': '?1',
     'sec-ch-ua-platform': '"Android"',
@@ -395,6 +396,7 @@ async function verifyOtp(axiosInstance, email, otpCode, otpId, referralCode, use
     'sec-fetch-mode': 'cors',
     'sec-fetch-site': 'same-origin',
     'user-agent': userAgent,
+    // TODO: Update secret-key jika diperlukan dari DevTools
     'secret-key': '9cdf8af5683bcacda9006738ec893a60ea50f615b0e7774a612f05781005e1',
     'timestamp': timestamp.toString()
   };
@@ -407,10 +409,11 @@ async function verifyOtp(axiosInstance, email, otpCode, otpId, referralCode, use
     
     if (response.data.code === 0) {
       spinner.succeed('Account registered successfully!');
+      // TODO: Verifikasi format response.data.data
       return {
         success: true,
-        token: response.data.data.token,
-        refresh_token: response.data.data.refresh_token || response.data.data.token
+        token: response.data.data.token || response.data.data,
+        refresh_token: response.data.data.refresh_token || response.data.data.token || ''
       };
     } else {
       throw new Error(`Server error: ${JSON.stringify(response.data)}`);
@@ -426,7 +429,7 @@ async function verifyOtp(axiosInstance, email, otpCode, otpId, referralCode, use
 
 // ==================== MAIN REGISTRATION FUNCTION ====================
 
-async function doRegister(axiosInstance, referralCode, accountNumber) {
+async function doRegister(axiosInstance, accountNumber) {
   const userAgent = new UserAgent().toString();
   const ipAddress = await getIpAddress(axiosInstance);
   
@@ -441,11 +444,10 @@ async function doRegister(axiosInstance, referralCode, accountNumber) {
   const email = emailData.address;
   console.log(`${GREEN}✓ Generated Email: ${email}${RESET}`);
   
-  // STEP 1: Send OTP
+  // STEP 1: Send OTP (tanpa referral code)
   const { success: sendSuccess, otp_id: otpId } = await sendOtp(
     axiosInstance, 
     email, 
-    referralCode, 
     userAgent
   );
   
@@ -466,13 +468,12 @@ async function doRegister(axiosInstance, referralCode, accountNumber) {
   
   console.log(`${GREEN}✓ OTP Code received: ${otpCode}${RESET}`);
   
-  // STEP 3: Verify OTP (register account)
+  // STEP 3: Verify OTP (tanpa referral code)
   const { success: verifySuccess, token, refresh_token } = await verifyOtp(
     axiosInstance,
     email,
     otpCode,
     otpId,
-    referralCode,
     userAgent
   );
   
@@ -499,7 +500,7 @@ async function main() {
   });
   
   console.log(centerText(`${BLUE}============================================${RESET}`));
-  console.log(centerText(`${CYAN}✪ BOT AUTO REFERRAL ASP ✪${RESET}\n`));
+  console.log(centerText(`${CYAN}✪ BOT AUTO REFERRAL ASP (UPDATED) ✪${RESET}\n`));
   
   // Ask if user wants to use proxy
   const { useProxy } = await inquirer.prompt([{
@@ -550,15 +551,9 @@ async function main() {
     if (accountCount > 0) break;
   }
   
-  // Ask for referral code
-  const { referralCode } = await inquirer.prompt([{
-    type: 'input',
-    name: 'referralCode',
-    message: `${CYAN}Enter your referral code:${RESET}`
-  }]);
-  
   console.log(`${YELLOW}${'='.repeat(50)}${RESET}`);
   console.log(`${YELLOW}Starting to create ${accountCount} accounts...${RESET}`);
+  console.log(`${YELLOW}Note: Referral system has been removed from API${RESET}`);
   console.log(`${YELLOW}${'='.repeat(50)}${RESET}`);
   console.log(`${YELLOW}Please wait, this may take a while...${RESET}\n`);
   
@@ -625,7 +620,7 @@ async function main() {
       email,
       token,
       refresh_token
-    } = await doRegister(axiosInstance, referralCode, `account_${i + 1}`);
+    } = await doRegister(axiosInstance, `account_${i + 1}`);
     
     if (!success) {
       failCount++;
