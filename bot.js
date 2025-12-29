@@ -10,7 +10,55 @@ puppeteer.use(StealthPlugin());
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// ===== GUERRILLA MAIL CLIENT =====
+// ===== TEMP MAIL CLIENTS =====
+// Gunakan TempMail.org sebagai alternatif
+async function createTempMailClient() {
+  const baseURL = 'https://www.1secmail.com/api/v1/';
+  
+  // Generate random email
+  const response = await axios.get(baseURL, {
+    params: {
+      action: 'genRandomMailbox',
+      count: 1
+    }
+  });
+
+  const email = response.data[0];
+  const [login, domain] = email.split('@');
+
+  return {
+    email,
+    login,
+    domain,
+    
+    async checkEmail() {
+      const res = await axios.get(baseURL, {
+        params: {
+          action: 'getMessages',
+          login: login,
+          domain: domain
+        }
+      });
+      
+      return res.data || [];
+    },
+
+    async getEmailBody(emailId) {
+      const res = await axios.get(baseURL, {
+        params: {
+          action: 'readMessage',
+          login: login,
+          domain: domain,
+          id: emailId
+        }
+      });
+      
+      return res.data;
+    }
+  };
+}
+
+// Guerrilla Mail sebagai backup
 async function createGuerrillaMailClient() {
   const baseURL = 'https://api.guerrillamail.com/ajax.php';
   
@@ -95,9 +143,9 @@ async function registerAllscale() {
   let emailClient;
 
   try {
-    // Setup Guerrilla Mail
+    // Setup Temp Mail (lebih reliable dari Guerrilla)
     console.log('📧 Setup email temporary...');
-    emailClient = await createGuerrillaMailClient();
+    emailClient = await createTempMailClient();
     const email = emailClient.email;
     console.log(`✅ Email generated: ${email}`);
 
@@ -225,6 +273,17 @@ async function registerAllscale() {
 
     await delay(3000);
     await page.screenshot({ path: 'step3-after-submit.png' });
+    
+    // Tunggu hingga halaman berubah atau muncul notifikasi
+    console.log('⏳ Menunggu respons dari website...');
+    await delay(3000);
+    
+    // Cek apakah ada pesan sukses atau error di halaman
+    const pageText = await page.evaluate(() => document.body.innerText);
+    console.log('📄 Page text sample:', pageText.substring(0, 200));
+    
+    // Screenshot setelah submit
+    await page.screenshot({ path: 'step3b-waiting-otp.png' });
 
     // Tunggu OTP dikirim dan ambil dari email
     console.log('📬 Menunggu OTP dari email...');
@@ -243,10 +302,18 @@ async function registerAllscale() {
         if (emails && emails.length > 0) {
           // Debug: tampilkan semua email
           for (const mail of emails) {
-            console.log(`   📧 From: ${mail.mail_from}, Subject: ${mail.mail_subject}`);
+            console.log(`   📧 From: ${mail.from || mail.mail_from}, Subject: ${mail.subject || mail.mail_subject}`);
             
-            const body = mail.mail_body || mail.mail_excerpt || '';
-            console.log(`   📄 Body preview: ${body.substring(0, 100)}...`);
+            // Get full email body untuk 1secmail
+            let body = '';
+            if (mail.id) {
+              const fullMail = await emailClient.getEmailBody(mail.id);
+              body = fullMail.textBody || fullMail.body || fullMail.htmlBody || '';
+            } else {
+              body = mail.mail_body || mail.mail_excerpt || '';
+            }
+            
+            console.log(`   📄 Body preview: ${body.substring(0, 150)}...`);
             
             // Coba berbagai pattern OTP
             const patterns = [
