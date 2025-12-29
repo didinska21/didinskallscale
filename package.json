@@ -1,0 +1,16 @@
+// package.json
+{
+  "name": "allscale-register",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node register.js"
+  },
+  "dependencies": {
+    "puppeteer": "^21.6.1",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "dotenv": "^16.3.1",
+    "axios": "^1.6.2"
+  }
+}
